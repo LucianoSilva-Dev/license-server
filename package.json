@@ -9,6 +9,8 @@
     "seed": "tsx src/seed.ts"
   },
   "dependencies": {
+    "@fastify/swagger": "^9.7.0",
+    "@scalar/fastify-api-reference": "^1.52.1",
     "better-sqlite3": "^11.9.1",
     "dotenv": "^17.3.1",
     "fastify": "^5.8.1",
@@ -23,6 +25,9 @@
   },
   "packageManager": "pnpm@10.30.1",
   "pnpm": {
-    "onlyBuiltDependencies": ["better-sqlite3", "esbuild"]
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
   }
 }

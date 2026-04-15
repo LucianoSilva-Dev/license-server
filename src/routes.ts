@@ -4,7 +4,31 @@ import { createKey, getKeyByValue, listAllKeys, updateKey, deleteKey, maskKey, g
 const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
 
 export const publicRoutes: FastifyPluginAsync = async (server) => {
-    server.get<{ Params: { key: string } }>('/v/:key', async (request, reply) => {
+    server.get<{
+        Params: { key: string };
+    }>('/v/:key', {
+        schema: {
+            tags: ['Validação'],
+            summary: 'Validar uma chave de licença',
+            description: 'Verifica se uma chave de licença é válida, não está revogada e não está expirada.',
+            params: {
+                type: 'object',
+                required: ['key'],
+                properties: {
+                    key: { type: 'string', description: 'Chave de licença' },
+                },
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        valid: { type: 'boolean' },
+                        reason: { type: 'string', enum: ['invalid', 'revoked', 'expired'] },
+                    },
+                },
+            },
+        },
+    }, async (request, reply) => {
         const { key } = request.params;
 
         const record = getKeyByValue(key);
@@ -37,11 +61,66 @@ export const adminRoutes: FastifyPluginAsync = async (server) => {
         }
     });
 
-    server.get('/admin/secret', async () => {
+    server.get('/admin/secret', {
+        schema: {
+            tags: ['Admin'],
+            summary: 'Obter secret de administração',
+            description: 'Retorna o ADMIN_SECRET atualmente em uso.',
+            security: [{ bearerAuth: [] }],
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        secret: { type: 'string' },
+                    },
+                },
+                401: {
+                    type: 'object',
+                    properties: {
+                        error: { type: 'string' },
+                    },
+                },
+            },
+        },
+    }, async () => {
         return { secret: ADMIN_SECRET };
     });
 
-    server.post('/admin/keys', async (request, reply) => {
+    server.post('/admin/keys', {
+        schema: {
+            tags: ['Admin - Chaves'],
+            summary: 'Criar nova chave de licença',
+            description: 'Cria uma nova chave de licença com um label opcional e data de expiração.',
+            security: [{ bearerAuth: [] }],
+            body: {
+                type: 'object',
+                required: ['label'],
+                properties: {
+                    label: { type: 'string', description: 'Identificador descritivo da chave' },
+                    expires_at: { type: 'string', format: 'date-time', description: 'Data de expiração (ISO 8601)' },
+                },
+            },
+            response: {
+                201: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'number' },
+                        key: { type: 'string' },
+                        label: { type: 'string' },
+                        status: { type: 'string' },
+                        expires_at: { type: 'string', nullable: true },
+                        created_at: { type: 'string' },
+                    },
+                },
+                400: {
+                    type: 'object',
+                    properties: {
+                        error: { type: 'string' },
+                    },
+                },
+            },
+        },
+    }, async (request, reply) => {
         const body = request.body as { label?: string; expires_at?: string };
         if (!body?.label) {
             return reply.code(400).send({ error: 'Campo "label" e obrigatorio' });
@@ -50,7 +129,30 @@ export const adminRoutes: FastifyPluginAsync = async (server) => {
         return reply.code(201).send(record);
     });
 
-    server.get('/admin/keys', async () => {
+    server.get('/admin/keys', {
+        schema: {
+            tags: ['Admin - Chaves'],
+            summary: 'Listar todas as chaves',
+            description: 'Retorna todas as chaves de licença cadastradas (com a chave mascarada).',
+            security: [{ bearerAuth: [] }],
+            response: {
+                200: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            id: { type: 'number' },
+                            key: { type: 'string' },
+                            label: { type: 'string' },
+                            status: { type: 'string' },
+                            expires_at: { type: 'string', nullable: true },
+                            created_at: { type: 'string' },
+                        },
+                    },
+                },
+            },
+        },
+    }, async () => {
         const keys = listAllKeys();
         return keys.map((k) => ({
             ...k,
@@ -59,7 +161,42 @@ export const adminRoutes: FastifyPluginAsync = async (server) => {
         }));
     });
 
-    server.get<{ Params: { id: string } }>('/admin/keys/:id', async (request, reply) => {
+    server.get<{
+        Params: { id: string };
+    }>('/admin/keys/:id', {
+        schema: {
+            tags: ['Admin - Chaves'],
+            summary: 'Buscar chave por ID',
+            description: 'Retorna os dados de uma chave de licença específica.',
+            security: [{ bearerAuth: [] }],
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'string', description: 'ID da chave' },
+                },
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'number' },
+                        key: { type: 'string' },
+                        label: { type: 'string' },
+                        status: { type: 'string' },
+                        expires_at: { type: 'string', nullable: true },
+                        created_at: { type: 'string' },
+                    },
+                },
+                404: {
+                    type: 'object',
+                    properties: {
+                        error: { type: 'string' },
+                    },
+                },
+            },
+        },
+    }, async (request, reply) => {
         const id = parseInt(request.params.id, 10);
         const d = getDb();
         const record = d.prepare('SELECT * FROM license_keys WHERE id = ?').get(id);
@@ -69,7 +206,50 @@ export const adminRoutes: FastifyPluginAsync = async (server) => {
         return { ...record, key: maskKey((record as any).key) };
     });
 
-    server.patch<{ Params: { id: string } }>('/admin/keys/:id', async (request, reply) => {
+    server.patch<{
+        Params: { id: string };
+    }>('/admin/keys/:id', {
+        schema: {
+            tags: ['Admin - Chaves'],
+            summary: 'Atualizar chave de licença',
+            description: 'Atualiza parcialmente os dados de uma chave de licença (label, status, expires_at).',
+            security: [{ bearerAuth: [] }],
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'string', description: 'ID da chave' },
+                },
+            },
+            body: {
+                type: 'object',
+                properties: {
+                    label: { type: 'string', description: 'Novo label' },
+                    status: { type: 'string', enum: ['active', 'revoked', 'expired'], description: 'Novo status' },
+                    expires_at: { type: 'string', nullable: true, description: 'Nova data de expiração (null para remover)' },
+                },
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'number' },
+                        key: { type: 'string' },
+                        label: { type: 'string' },
+                        status: { type: 'string' },
+                        expires_at: { type: 'string', nullable: true },
+                        created_at: { type: 'string' },
+                    },
+                },
+                404: {
+                    type: 'object',
+                    properties: {
+                        error: { type: 'string' },
+                    },
+                },
+            },
+        },
+    }, async (request, reply) => {
         const id = parseInt(request.params.id, 10);
         const body = request.body as { label?: string; status?: 'active' | 'revoked' | 'expired'; expires_at?: string | null };
         const record = updateKey(id, body as any);
@@ -79,7 +259,35 @@ export const adminRoutes: FastifyPluginAsync = async (server) => {
         return { ...record, key: maskKey(record.key) };
     });
 
-    server.delete<{ Params: { id: string } }>('/admin/keys/:id', async (request, reply) => {
+    server.delete<{
+        Params: { id: string };
+    }>('/admin/keys/:id', {
+        schema: {
+            tags: ['Admin - Chaves'],
+            summary: 'Deletar chave de licença',
+            description: 'Remove permanentemente uma chave de licença.',
+            security: [{ bearerAuth: [] }],
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'string', description: 'ID da chave' },
+                },
+            },
+            response: {
+                204: {
+                    type: 'null',
+                    description: 'Chave deletada com sucesso',
+                },
+                404: {
+                    type: 'object',
+                    properties: {
+                        error: { type: 'string' },
+                    },
+                },
+            },
+        },
+    }, async (request, reply) => {
         const id = parseInt(request.params.id, 10);
         const deleted = deleteKey(id);
         if (!deleted) {

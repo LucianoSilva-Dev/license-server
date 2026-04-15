@@ -1,5 +1,7 @@
 import 'dotenv/config';
 import fastify from 'fastify';
+import swagger from '@fastify/swagger';
+import scalar from '@scalar/fastify-api-reference';
 import { v4 as uuidv4 } from 'uuid';
 import { publicRoutes, adminRoutes } from './routes.js';
 import { getDb } from './db.js';
@@ -9,6 +11,34 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 let ADMIN_SECRET = process.env.ADMIN_SECRET || '';
 
 export const app = fastify({ logger: false });
+
+await app.register(swagger, {
+    openapi: {
+        info: {
+            title: 'License Server API',
+            description: 'API de gerenciamento de chaves de acesso',
+            version: '1.0.0',
+        },
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http',
+                    scheme: 'bearer',
+                },
+            },
+        },
+    },
+});
+
+await app.register(scalar, {
+    routePrefix: '/docs',
+    configuration: {
+        metaData: {
+            title: 'License Server - Documentação',
+        },
+        theme: 'default',
+    },
+});
 
 app.register(publicRoutes);
 app.register(adminRoutes);
