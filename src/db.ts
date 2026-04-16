@@ -52,7 +52,23 @@ export function createKey(label: string, expiresAt?: string): LicenseKey {
 
 export function getKeyByValue(key: string): LicenseKey | undefined {
     const d = getDb();
-    return d.prepare('SELECT * FROM license_keys WHERE key = ?').get(key) as LicenseKey | undefined;
+    const record = d.prepare('SELECT * FROM license_keys WHERE key = ?').get(key) as LicenseKey | undefined;
+    if (record) return record;
+
+    const sep = '****';
+    if (key.includes(sep)) {
+        const idx = key.indexOf(sep);
+        const prefix = key.slice(0, idx);
+        const suffix = key.slice(idx + sep.length);
+        if (prefix && suffix) {
+            return d.prepare('SELECT * FROM license_keys WHERE key LIKE ? AND key LIKE ?').get(
+                `${prefix}%`,
+                `%${suffix}`
+            ) as LicenseKey | undefined;
+        }
+    }
+
+    return undefined;
 }
 
 export function listAllKeys(): LicenseKey[] {

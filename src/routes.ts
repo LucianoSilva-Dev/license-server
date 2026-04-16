@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { createKey, getKeyByValue, listAllKeys, updateKey, deleteKey, maskKey, getDb } from './db.js';
+import { createKey, getKeyByValue, listAllKeys, updateKey, deleteKey, getDb } from './db.js';
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
 
@@ -153,12 +153,7 @@ export const adminRoutes: FastifyPluginAsync = async (server) => {
             },
         },
     }, async () => {
-        const keys = listAllKeys();
-        return keys.map((k) => ({
-            ...k,
-            key: maskKey(k.key),
-            _full_key: undefined,
-        }));
+        return listAllKeys();
     });
 
     server.get<{
@@ -203,7 +198,7 @@ export const adminRoutes: FastifyPluginAsync = async (server) => {
         if (!record) {
             return reply.code(404).send({ error: 'Chave nao encontrada' });
         }
-        return { ...record, key: maskKey((record as any).key) };
+        return record;
     });
 
     server.patch<{
@@ -256,7 +251,7 @@ export const adminRoutes: FastifyPluginAsync = async (server) => {
         if (!record) {
             return reply.code(404).send({ error: 'Chave nao encontrada' });
         }
-        return { ...record, key: maskKey(record.key) };
+        return record;
     });
 
     server.delete<{
